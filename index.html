@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why Can't They Remember? Representation and Retrieval Bottlenecks in Multi-Turn Acoustic Memory</title>
+<meta name="description" content="EnvMem is a controlled multi-turn benchmark for environmental acoustic memory in large audio language models. Acoustic cues are not erased; failed trials show representational trajectory drift.">
+<meta property="og:title" content="Why Can't They Remember? Uncovering Representation and Retrieval Bottlenecks in Multi-Turn Acoustic Memory">
+<meta property="og:description" content="Audio LLMs remember what was said, but forget what was heard. EnvMem shows the sound is still in the hidden states, just misaligned with the decoding pathway.">
+<meta property="og:image" content="https://swagshaw.github.io/EnvMem/static/video/poster.jpg">
+<meta property="og:image:width" content="1920">
+<meta property="og:image:height" content="1080">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='10' width='4' height='12' rx='2' fill='%23F0616D'/%3E%3Crect x='10' y='6' width='4' height='20' rx='2' fill='%234A8FE7'/%3E%3Crect x='17' y='11' width='4' height='10' rx='2' fill='%232BC4A9' opacity='.75'/%3E%3Crect x='24' y='14' width='4' height='4' rx='2' fill='%239C7BE0' opacity='.5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1B2640; --ink-2:#3A4357; --muted:#5E6679; --rule:#DDE2EC; --bg:#FFFFFF; --bg-soft:#F4F6FB;
+  --accent:#2D4A8A; --link:#2459B3;
+  --aco:#F0616D; --sem:#4A8FE7; --teal:#2BC4A9; --vio:#9C7BE0; --slate:#C9D0DD;
+  --radius:14px; --shadow:0 1px 2px rgba(27,38,64,.06),0 8px 24px rgba(27,38,64,.06);
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+img{max-width:100%;height:auto}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+.narrow{max-width:820px}
+
+/* top colour bar + nav */
+.topbar{height:5px;display:grid;grid-template-columns:repeat(4,1fr)}
+.topbar span:nth-child(1){background:var(--aco)} .topbar span:nth-child(2){background:var(--sem)}
+.topbar span:nth-child(3){background:var(--teal)} .topbar span:nth-child(4){background:var(--vio)}
+nav.site{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid var(--rule)}
+nav.site .wrap{display:flex;align-items:center;gap:22px;height:54px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+.brand:hover{text-decoration:none}
+.brand svg{width:22px;height:22px}
+nav.site ul{display:flex;gap:18px;list-style:none;margin:0 0 0 auto;padding:0;overflow-x:auto;scrollbar-width:none}
+nav.site ul::-webkit-scrollbar{display:none}
+nav.site li a{color:var(--muted);font-size:14px;font-weight:500;white-space:nowrap}
+nav.site li a:hover{color:var(--ink);text-decoration:none}
+
+/* hero */
+header.hero{padding:64px 0 36px;text-align:center}
+.kicker{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);background:var(--bg-soft);border:1px solid var(--rule);padding:5px 12px;border-radius:999px}
+.kicker b{color:var(--aco)}
+h1.title{font-size:clamp(30px,5.2vw,52px);line-height:1.1;letter-spacing:-.025em;font-weight:800;margin:22px auto 0;max-width:940px}
+h1.title .q{background:linear-gradient(90deg,var(--aco),var(--sem) 45%,var(--teal) 75%,var(--vio));-webkit-background-clip:text;background-clip:text;color:transparent}
+h1.title .rest{display:block;font-size:.62em;letter-spacing:-.015em;margin-top:10px;color:var(--ink)}
+.subtitle{font-family:var(--serif);font-style:italic;font-size:clamp(17px,2.2vw,21px);color:var(--ink-2);margin:18px auto 0;max-width:740px}
+.subtitle .w{color:var(--sem);font-style:normal;font-weight:600} .subtitle .h{color:var(--aco);font-style:normal;font-weight:600}
+.authors{margin:28px auto 0;font-size:18px;font-weight:500;display:flex;flex-wrap:wrap;justify-content:center;gap:4px 22px;max-width:860px}
+.authors sup{color:var(--accent);font-weight:600;margin-left:1px}
+.affils{margin:8px 0 0;color:var(--muted);font-size:15px;display:flex;flex-wrap:wrap;justify-content:center;gap:2px 20px}
+.affils sup{color:var(--accent);font-weight:600;margin-right:2px}
+.buttons{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:28px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:999px;background:var(--ink);color:#fff;font-weight:600;font-size:15px;border:1px solid var(--ink);transition:transform .15s ease,background .15s ease}
+.btn:hover{text-decoration:none;transform:translateY(-1px);background:#2A3656}
+.btn svg{width:17px;height:17px;fill:currentColor}
+.btn.ghost{background:#fff;color:var(--ink);border-color:var(--rule)}
+.btn.ghost:hover{background:var(--bg-soft)}
+
+/* stats band */
+.stats{display:grid;grid-template-columns:repeat(6,1fr);margin:40px auto 0;border:1px solid var(--rule);border-radius:var(--radius);overflow:hidden;background:#fff;box-shadow:var(--shadow)}
+.stat{padding:16px 10px;text-align:center;border-right:1px solid var(--rule)}
+.stat:last-child{border-right:0}
+.stat b{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em}
+.stat span{display:block;font-size:12.5px;color:var(--muted);line-height:1.35;margin-top:2px}
+
+.film{max-width:960px;margin:40px auto 0}
+.film video{width:100%;display:block;aspect-ratio:16/9;border-radius:18px;background:#06080d;box-shadow:0 24px 60px rgba(27,38,64,.22);border:1px solid var(--rule)}
+
+/* sections */
+section{padding:56px 0;border-top:1px solid var(--rule)}
+section.soft{background:var(--bg-soft)}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:10px}
+.sec-num{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:500}
+h2{font-size:clamp(24px,3.2vw,32px);letter-spacing:-.02em;line-height:1.2;margin:0}
+.lede{color:var(--ink-2);font-size:17px;max-width:780px;margin:6px 0 26px}
+.serif{font-family:var(--serif);font-size:18.5px;line-height:1.7;color:var(--ink-2)}
+.serif em{color:var(--ink)}
+
+figure{margin:0}
+figure a{display:block}
+figure img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--rule);background:#fff}
+figcaption{font-size:14px;color:var(--muted);margin-top:10px;line-height:1.5}
+figcaption b{color:var(--ink)}
+
+.tldr{display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid var(--rule);border-left:4px solid var(--accent);border-radius:10px;padding:16px 18px;margin-bottom:24px;box-shadow:var(--shadow)}
+.tldr .tag{flex:none;font-size:12px;font-weight:800;letter-spacing:.1em;color:#fff;background:var(--accent);border-radius:6px;padding:3px 8px;margin-top:2px}
+.tldr p{margin:0;font-size:17px}
+
+.chip{display:inline-flex;align-items:center;gap:6px;font-weight:600;white-space:nowrap}
+.chip::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--c)}
+.c-aco{--c:var(--aco)} .c-sem{--c:var(--sem)} .c-teal{--c:var(--teal)} .c-vio{--c:var(--vio)} .c-slate{--c:var(--slate)}
+
+.seg{display:inline-flex;flex-wrap:wrap;background:#fff;border:1px solid var(--rule);border-radius:999px;padding:3px}
+.seg button{font:inherit;font-size:14px;font-weight:600;color:var(--muted);background:transparent;border:0;border-radius:999px;padding:6px 14px;cursor:pointer;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.seg button:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+
+/* gap explorer */
+.gx-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+.gx-card{background:#fff;border:1px solid var(--rule);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 24px 24px}
+.gx-label{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.gx-track{display:flex;gap:4px;height:34px;margin-bottom:6px}
+.gx-turn{flex:1;border-radius:5px;background:#E4E8F0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;color:var(--muted);min-width:0;transition:background .3s}
+.gx-turn.anchor{background:var(--aco);color:#fff}
+.gx-turn.probe{background:var(--vio);color:#fff}
+.gx-legend{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13px;color:var(--ink-2);margin-bottom:22px}
+.gx-bars{display:grid;gap:12px}
+.gx-row{display:grid;grid-template-columns:150px 1fr 64px;align-items:center;gap:12px}
+.gx-row .lbl{font-weight:600;font-size:15px}
+.gx-bar{height:26px;background:#EEF1F6;border-radius:7px;overflow:hidden;position:relative}
+.gx-fill{height:100%;border-radius:7px;width:0;transition:width .55s cubic-bezier(.2,.8,.2,1)}
+.gx-base{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55;transition:left .55s cubic-bezier(.2,.8,.2,1)}
+.gx-row .val{font-variant-numeric:tabular-nums;font-weight:700;text-align:right}
+.gx-out{display:flex;flex-wrap:wrap;gap:8px 28px;align-items:baseline;margin-top:22px;padding-top:18px;border-top:1px solid var(--rule)}
+.gx-delta{font-size:34px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.gx-delta.pos{color:var(--aco)} .gx-delta.neg{color:var(--sem)} .gx-delta.zero{color:var(--muted)}
+.gx-expl{flex:1;min-width:240px;color:var(--ink-2);font-size:15px}
+.formula{font-family:var(--serif);font-style:italic;white-space:nowrap}
+
+/* findings */
+.findings{display:grid;gap:18px}
+.finding{display:grid;grid-template-columns:52px minmax(0,1fr);gap:4px 16px;background:#fff;border:1px solid var(--rule);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow)}
+.finding .no{font-family:var(--mono);font-size:28px;font-weight:500;color:var(--accent);line-height:1}
+.finding h3{margin:0 0 6px;font-size:18px;line-height:1.35;letter-spacing:-.01em}
+.finding p{margin:0 0 8px;color:var(--ink-2)}
+.finding p:last-child{margin-bottom:0}
+.finding figure{grid-column:1/-1;margin-top:14px}
+.finding .pair{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px}
+.finding .pair figure{grid-column:auto;margin-top:0}
+.finding .side{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;margin-top:14px}
+.finding .side figure{grid-column:auto;margin-top:0}
+.verdict{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 8px;margin-right:6px;vertical-align:2px}
+.verdict.yes{color:#11734A;background:#DDF5E9} .verdict.no{color:#B42318;background:#FDE4E1}
+
+/* question layout */
+.rq{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:26px}
+.card{background:#fff;border:1px solid var(--rule);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 8px;font-size:16px}
+.card p{margin:0;color:var(--ink-2);font-size:15px}
+.card .tag{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--accent);display:block;margin-bottom:4px}
+
+/* tables */
+.table-card{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.plain{width:100%;border-collapse:collapse;font-size:14.5px}
+table.plain th,table.plain td{padding:8px 10px;text-align:right;border-bottom:1px solid #EDF0F5;white-space:nowrap;font-variant-numeric:tabular-nums}
+table.plain th:first-child,table.plain td:first-child{text-align:left}
+table.plain thead th{color:var(--muted);font-weight:600;font-size:13px}
+table.plain caption{caption-side:bottom;text-align:left;font-size:13px;color:var(--muted);padding-top:10px;white-space:normal}
+table.plain td.hi{font-weight:800;color:#13866F}
+table.plain td.ci{color:var(--muted);font-size:12.5px}
+table.plain tr.grp td{background:#FAFBFD;font-weight:600;color:var(--ink-2);font-size:13px;text-align:left}
+
+.two{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:24px;align-items:start}
+.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+
+/* example */
+.ex{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-top:26px}
+.bubble{border:1px solid var(--rule);border-radius:12px;padding:12px 14px;background:#fff}
+.bubble .who{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.bubble p{margin:0;font-size:15.5px}
+.cue{font-size:12.5px;font-weight:700;color:var(--aco);background:color-mix(in srgb,var(--aco) 10%,#fff);border:1px solid color-mix(in srgb,var(--aco) 40%,#fff);border-radius:999px;padding:1px 9px;font-family:var(--sans)}
+.opts{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.opts li{font-size:14px;border:1px solid var(--rule);border-radius:8px;padding:5px 9px;color:var(--ink-2)}
+.opts li.gold{border-color:var(--c);background:color-mix(in srgb,var(--c) 10%,#fff);color:var(--ink);font-weight:600}
+
+pre{margin:0;background:#141B2D;color:#E6EAF2;border-radius:12px;padding:18px 20px;overflow-x:auto;font-family:var(--mono);font-size:13.5px;line-height:1.65}
+.bib{position:relative}
+.copy{position:absolute;top:10px;right:10px;font:inherit;font-size:12.5px;font-weight:600;color:#E6EAF2;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:5px 10px;cursor:pointer}
+.copy:hover{background:rgba(255,255,255,.18)}
+
+footer{border-top:1px solid var(--rule);padding:30px 0 44px;color:var(--muted);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;justify-content:space-between}
+
+@media (max-width:860px){
+  .stats{grid-template-columns:repeat(3,1fr)}
+  .stat:nth-child(3){border-right:0}
+  .stat:nth-child(-n+3){border-bottom:1px solid var(--rule)}
+  .two,.rq,.ex,.three{grid-template-columns:minmax(0,1fr)}
+  .finding .side{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:600px){
+  header.hero{padding:40px 0 28px}
+  .kicker{font-size:10.5px;letter-spacing:.08em}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .stat,.stat:nth-child(3){border-right:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+  .stat:nth-child(2n){border-right:0}
+  .stat:nth-child(n+5){border-bottom:0}
+  nav.site ul{gap:14px}
+  .brand span{display:none}
+  .finding{grid-template-columns:1fr;padding:18px}
+  .finding .pair{grid-template-columns:1fr}
+  .gx-card{padding:16px 14px 18px}
+  .gx-row{grid-template-columns:96px 1fr 50px;gap:8px}
+  .gx-row .lbl{font-size:13.5px}
+  .gx-turn{font-size:0}
+  .gx-track{gap:2px}
+  .opts{grid-template-columns:1fr}
+  .seg button{font-size:13px;padding:6px 11px}
+  table.plain th,table.plain td{padding:7px 6px}
+  .formula{white-space:normal}
+}
+@media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} *{transition:none!important} }
+</style>
+</head>
+<body>
+
+<div class="topbar" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+<nav class="site" aria-label="Sections">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="EnvMem home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="10" width="4" height="12" rx="2" fill="#F0616D"/><rect x="10" y="6" width="4" height="20" rx="2" fill="#4A8FE7"/><rect x="17" y="11" width="4" height="10" rx="2" fill="#2BC4A9" opacity=".75"/><rect x="24" y="14" width="4" height="4" rx="2" fill="#9C7BE0" opacity=".5"/></svg>
+      <span>EnvMem</span>
+    </a>
+    <ul>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#benchmark">Benchmark</a></li>
+      <li><a href="#gap">The gap</a></li>
+      <li><a href="#diagnosis">Diagnosis</a></li>
+      <li><a href="#robustness">Robustness</a></li>
+      <li><a href="#bibtex">BibTeX</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <span class="kicker"><b>EMNLP 2026 Oral</b> · Acoustic Memory in Audio LLMs</span>
+    <h1 class="title"><span class="q">Why Can't They Remember?</span><span class="rest">Uncovering Representation and Retrieval Bottlenecks in Multi-Turn Acoustic Memory</span></h1>
+    <p class="subtitle">Audio language models remember <span class="w">what was said</span> but forget <span class="h">what was heard</span>. The sound is not erased; it drifts off the path the decoder reads from.</p>
+    <div class="authors">
+      <span>Yang Xiao<sup>1</sup></span>
+      <span>Siyi Wang<sup>1</sup></span>
+      <span>Han Yin<sup>2</sup></span>
+      <span>Hong Jia<sup>3</sup></span>
+      <span>Vidhyasaharan Sethu<sup>4</sup></span>
+      <span>Eun-Jung Holden<sup>1</sup></span>
+      <span>Ting Dang<sup>1</sup></span>
+    </div>
+    <div class="affils">
+      <span><sup>1</sup>The University of Melbourne</span>
+      <span><sup>2</sup>KAIST</span>
+      <span><sup>3</sup>The University of Auckland</span>
+      <span><sup>4</sup>UNSW Sydney</span>
+    </div>
+    <div class="buttons">
+      <a class="btn" href="https://arxiv.org/abs/2605.27039">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6V2zm8 1.5V8h4.5L14 3.5zM8 12h8v1.5H8V12zm0 3.5h8V17H8v-1.5z"/></svg>arXiv</a>
+      <a class="btn" href="https://arxiv.org/pdf/2605.27039">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10.2l3.6-3.6 1.4 1.4-6 6-6-6 1.4-1.4 3.6 3.6V3h2zM5 19h14v2H5v-2z"/></svg>PDF</a>
+      <a class="btn" href="#film">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Film</a>
+      <a class="btn ghost" href="#gap">Explore the gap</a>
+      <a class="btn ghost" href="#bibtex">BibTeX</a>
+    </div>
+
+    <div class="stats" role="list" aria-label="Benchmark statistics">
+      <div class="stat" role="listitem"><b>4,000</b><span>evaluation instances</span></div>
+      <div class="stat" role="listitem"><b>10</b><span>ESC-50 sound classes</span></div>
+      <div class="stat" role="listitem"><b>2–16</b><span>dialogue turns (<i>N</i>)</span></div>
+      <div class="stat" role="listitem"><b>8</b><span>everyday topics</span></div>
+      <div class="stat" role="listitem"><b>3</b><span>open-weight LALMs</span></div>
+      <div class="stat" role="listitem"><b>+12%</b><span>relative gap Δ at <i>N</i> = 16</span></div>
+    </div>
+
+    <div class="film" id="film">
+      <video controls preload="metadata" playsinline poster="static/video/poster.jpg">
+        <source src="static/video/envmem.mp4" type="video/mp4">
+      </video>
+    </div>
+  </div>
+</header>
+
+<section id="overview">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Overview</h2></div>
+    <p class="lede">A spoken conversation carries more than words: rain, a car horn or a crying baby in the background. We ask whether audio LLMs keep that environmental context across turns, and if not, where it gets lost.</p>
+    <div class="tldr"><span class="tag">TL;DR</span><p>On EnvMem, acoustic memory decays faster than semantic memory as dialogues grow. Yet the sound remains linearly decodable from deep hidden states even on failed trials. Failures come from <em>representational trajectory drift</em>, not from erased information or misallocated attention, and patching in a clean representation rescues most of them.</p></div>
+
+    <div class="rq">
+      <div class="card"><span class="tag">RQ1</span><h3>How large is the gap?</h3><p>What is the performance gap between linguistic and environmental acoustic memory in multi-turn LALMs?</p></div>
+      <div class="card"><span class="tag">RQ2</span><h3>Where does it come from?</h3><p>Does acoustic memory failure stem from the representation level (information lost across layers) or the retrieval level (too little attention to early acoustic cues)?</p></div>
+    </div>
+
+    <div class="narrow" style="margin-top:10px">
+      <h3 style="font-size:20px;margin:0 0 10px">Abstract</h3>
+      <p class="serif">Large audio language models (LALMs) process both speech and environmental acoustic cues, yet struggle to retain non-speech information across multi-turn interactions. The performance gap between semantic (speech) and acoustic (non-speech) understanding remains poorly understood, and the underlying mechanisms of representation and retrieval are still unclear. This work introduces EnvMem, a controlled multi-turn benchmark designed to study this gap and identify the root causes of failures at the representation (i.e., latent embeddings) and retrieval levels (i.e., attention allocation). We further conduct post-hoc interventions to probe representational structure and attention dynamics. Our results reveal representational trajectory drift as the key failure mode, while showing that attention allocation tested here do not consistently explain the degradation. Overall, we provide a systematic framework for analyzing and improving non-linguistic memory in long-context LALMs, shedding light on future data and training design for robust acoustic memory modeling.</p>
+    </div>
+  </div>
+</section>
+
+<section id="benchmark" class="soft">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">02</span><h2>The EnvMem benchmark</h2></div>
+    <p class="lede">The environmental sound appears <b>only</b> in the first user turn. Filler turns extend the context without new sounds, and the final turn asks about either the sound or a fact from that same first turn, so both probes share one audio context.</p>
+    <figure><a href="static/images/envmem_main.png" title="Open full size"><img src="static/images/envmem_main.png" width="2400" height="1127" alt="Overview of the EnvMem framework: (a) a multi-turn evaluation example where turn 1 contains speech mixed with a car horn and turn N asks an acoustic or a semantic multiple-choice question; (b) the curation pipeline of dialogue generation, keyword filtering, speech synthesis, environment sound sampling, audio mixing and dialogue assembly; (c) the topic distribution over eight everyday topics."></a>
+      <figcaption><b>Overview of EnvMem.</b> (a) A multi-turn example with the acoustic and semantic retrieval tasks. (b) The curation pipeline. (c) Topic distribution.</figcaption>
+    </figure>
+
+    <div class="ex" aria-label="Example probes">
+      <div class="bubble">
+        <div class="who">TURN 1 · user audio <span class="cue">car horn honk · 10 dB SNR</span></div>
+        <p>“I need to finish the laundry later, and I wrote down 3 loads.”</p>
+      </div>
+      <div class="bubble">
+        <div class="who">TURNS 2 … N−1 · clean speech fillers</div>
+        <p>Same voice, same topic, keyword-filtered so no turn ever mentions the sound.</p>
+      </div>
+      <div class="bubble" style="--c:var(--aco)">
+        <div class="who"><span class="chip c-aco">Acoustic probe</span> TURN N</div>
+        <p>What was the background environment in the very first audio I sent?</p>
+        <ul class="opts"><li class="gold">(A) car_horn</li><li>(B) crying_baby</li><li>(C) rain</li><li>(D) dog</li></ul>
+      </div>
+      <div class="bubble" style="--c:var(--sem)">
+        <div class="who"><span class="chip c-sem">Semantic probe</span> TURN N</div>
+        <p>When the user first mentioned the laundry, how many batches did it seem like?</p>
+        <ul class="opts"><li>(A) a single load</li><li>(B) one batch</li><li class="gold">(C) just a few</li><li>(D) several batches</li></ul>
+      </div>
+    </div>
+
+    <div class="two" style="margin-top:30px">
+      <div>
+        <h3 style="margin:0 0 8px;font-size:18px">Controlled by design</h3>
+        <p style="margin:0 0 12px;color:var(--ink-2)">Sounds come from 10 ESC-50 classes in four families (weather/water, machine, vocal-bio, impulse), mixing continuous textures with transient events. Dialogues are GPT-4o templates over eight everyday topics; 38 of 208 candidate templates were removed by a 42-word lexicon that blocks textual leakage of the sound.</p>
+        <p style="margin:0;color:var(--ink-2)">Every utterance is synthesized with one TTS voice (Kokoro <code>af_heart</code>, 16 kHz) to remove speaker confounds. 10 classes × 4 context lengths × 50 templates gives 2,000 acoustic and 2,000 semantic probes. Models: <b>Qwen2.5-Omni</b>, <b>Kimi-Audio</b> and <b>Qwen2-Audio</b>, all with white-box access.</p>
+      </div>
+      <div class="card table-card" style="padding:14px 16px">
+        <table class="plain">
+          <caption>Acoustic classes in EnvMem. Each class has 50 templates per context length, 200 samples in total.</caption>
+          <thead><tr><th>Sound family</th><th>ESC-50 classes</th></tr></thead>
+          <tbody>
+            <tr><td>Weather / Water</td><td style="text-align:left;white-space:normal">rain, thunderstorm, sea waves</td></tr>
+            <tr><td>Machine</td><td style="text-align:left;white-space:normal">engine, vacuum cleaner, car horn</td></tr>
+            <tr><td>Vocal-Bio</td><td style="text-align:left;white-space:normal">dog, crying baby</td></tr>
+            <tr><td>Impulse</td><td style="text-align:left;white-space:normal">clock tick, crackling fire</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="gap">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Sound fades faster than words</h2></div>
+    <p class="lede">Pick a model and a dialogue length. Bars show accuracy on the two probes; the thin mark is the model's own single-turn (<i>N</i> = 2) baseline. Δ compares the <em>relative</em> drop of acoustic vs semantic memory, so a weak initial perception is factored out.</p>
+    <div class="gx-controls">
+      <div class="seg" role="group" aria-label="Model" id="gx-model">
+        <button type="button" data-m="0" aria-pressed="true">Qwen2.5-Omni</button>
+        <button type="button" data-m="1" aria-pressed="false">Kimi-Audio</button>
+        <button type="button" data-m="2" aria-pressed="false">Qwen2-Audio</button>
+      </div>
+      <div class="seg" role="group" aria-label="Number of turns" id="gx-n">
+        <button type="button" data-n="0" aria-pressed="false">N = 2</button>
+        <button type="button" data-n="1" aria-pressed="false">N = 4</button>
+        <button type="button" data-n="2" aria-pressed="false">N = 8</button>
+        <button type="button" data-n="3" aria-pressed="true">N = 16</button>
+      </div>
+    </div>
+    <div class="gx-card">
+      <p class="gx-label">Dialogue</p>
+      <div class="gx-track" id="gx-track" aria-hidden="true"></div>
+      <div class="gx-legend"><span class="chip c-aco">anchor turn with the sound</span><span class="chip c-slate">clean filler turns</span><span class="chip c-vio">probe question</span></div>
+      <p class="gx-label">Accuracy (4-way multiple choice)</p>
+      <div class="gx-bars">
+        <div class="gx-row"><span class="lbl"><span class="chip c-sem">Semantic</span></span><div class="gx-bar"><div class="gx-fill" id="gx-s" style="background:var(--sem)"></div><div class="gx-base" id="gx-sb"></div></div><span class="val" id="gx-sv"></span></div>
+        <div class="gx-row"><span class="lbl"><span class="chip c-aco">Acoustic</span></span><div class="gx-bar"><div class="gx-fill" id="gx-a" style="background:var(--aco)"></div><div class="gx-base" id="gx-ab"></div></div><span class="val" id="gx-av"></span></div>
+      </div>
+      <div class="gx-out" aria-live="polite">
+        <div><div class="gx-label" style="margin:0">Relative gap Δ(N)</div><div class="gx-delta" id="gx-d"></div></div>
+        <p class="gx-expl" id="gx-e"></p>
+      </div>
+    </div>
+    <p style="font-size:13.5px;color:var(--muted);margin:12px 0 0">Accuracies are read from the plot below (rounded); Δ values are those printed in the paper. <span class="formula">Δ(N) = [acc<sub>a</sub>(2) − acc<sub>a</sub>(N)] / acc<sub>a</sub>(2) − [acc<sub>s</sub>(2) − acc<sub>s</sub>(N)] / acc<sub>s</sub>(2)</span>; Δ &gt; 0 means acoustic memory degrades faster.</p>
+    <figure style="margin-top:26px"><a href="static/images/paper_figure3_n8n16.png" title="Open full size"><img src="static/images/paper_figure3_n8n16.png" width="2400" height="592" alt="Three line plots of accuracy versus number of turns N for Qwen2.5-Omni, Kimi-Audio and Qwen2-Audio. Semantic memory stays higher than acoustic memory, and the relative gap reaches +12%, +8% and +8% at N = 16."></a>
+      <figcaption><b>Acoustic vs semantic memory over increasing dialogue turns.</b> At <i>N</i> = 16 the relative gap is +12% for Qwen2.5-Omni and +8% for both Kimi-Audio and Qwen2-Audio. Qwen2-Audio starts with a perception gap (0.39 acoustic vs 0.90 semantic at <i>N</i> = 2), which is why its Δ is negative at short lengths.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="diagnosis" class="soft">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Diagnosing the failure</h2></div>
+    <p class="lede">Two hypotheses could explain the gap. Either the sound is lost as hidden states propagate (<b>representation</b>), or it is kept but the model fails to attend to it (<b>retrieval</b>). We test both observationally, then causally. Main analyses use Qwen2.5-Omni.</p>
+    <div class="findings">
+      <article class="finding">
+        <div class="no">1</div>
+        <div><h3><span class="verdict no">Not erased</span>The sound stays decodable in deep layers, even when the model answers wrong.</h3>
+        <p>A linear probe on the final query token recovers the 10-way sound class from layer 20 onward. At <i>N</i> = 16 it reaches about 70% by layer 25 (about 80% at <i>N</i> = 2). Restricted to trials the model <em>failed</em>, layer-25 probe accuracy is still about 48%, far above the 10% chance level.</p>
+        <p>Context length also moves where the sound is integrated: at <i>N</i> = 2 the probe reaches about 0.50 by layer 5, while at <i>N</i> = 8 and 16 mid-layer accuracy stays near 0.20 up to layer 15 and jumps in layers 16–21.</p></div>
+        <div class="pair">
+          <figure><a href="static/images/sec_4_1_probe.png" title="Open full size"><img src="static/images/sec_4_1_probe.png" width="1408" height="924" alt="Layer-wise linear probe accuracy for N = 2, 4, 8 and 16 on all samples, rising sharply after layer 15 and peaking near layer 25."></a><figcaption>(a) all samples</figcaption></figure>
+          <figure><a href="static/images/sec_4_1_probe_failed.png" title="Open full size"><img src="static/images/sec_4_1_probe_failed.png" width="1408" height="924" alt="Layer-wise linear probe accuracy restricted to failed trials, still reaching about 0.5 in deep layers for N = 16."></a><figcaption>(b) failed samples only</figcaption></figure>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="no">2</div>
+        <div><h3><span class="verdict yes">Drift</span>Failed trajectories collapse toward a short-context regime.</h3>
+        <p>Cross-layer CKA compares hidden states of failed long-context trials with successful trials of the same <i>N</i> and with short (<i>N</i> = 2) trials, matched on sound class. Layers 0–5 show no differentiation. In layers 6–19, failed trials are consistently closer to the short baseline than to successful ones: <span class="formula">δ = CKA(failed, short) − CKA(failed, success)</span> is 0.054, 0.055 and 0.067 at <i>N</i> = 4, 8, 16. In layers 20–28 a high-similarity block appears but peaks off the diagonal, a phase-shifted integration.</p>
+        <p>We call this <b>representational trajectory drift</b>: the information is present, but its format no longer matches what the decoding pathway expects.</p></div>
+        <div class="side">
+          <figure><a href="static/images/sec_4_1_cka.png" title="Open full size"><img src="static/images/sec_4_1_cka.png" width="1873" height="1610" alt="Four cross-layer CKA heatmaps: failed versus success and failed versus clean N = 2, for N = 4 and N = 16. Similarity is higher against the short-context baseline, with an off-diagonal block in deep layers."></a><figcaption>Cross-layer CKA. Top: failed vs same-<i>N</i> success. Bottom: failed vs short <i>N</i> = 2.</figcaption></figure>
+          <figure><a href="static/images/paper_figure8_cka_scanline_unified_qwen25omni.png" title="Open full size"><img src="static/images/paper_figure8_cka_scanline_unified_qwen25omni.png" width="2400" height="1382" alt="CKA scanlines for Qwen2.5-Omni across N, showing failed trials aligning more with the short-context baseline in the middle layers."></a><figcaption>CKA scanlines for Qwen2.5-Omni (appendix).</figcaption></figure>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="no">3</div>
+        <div><h3><span class="verdict no">Not attention</span>Attention allocation does not explain the failure.</h3>
+        <p>If long contexts diluted attention, the anchor turn should receive less attention as <i>N</i> grows. Instead, at <i>N</i> = 4 the anchor gets <em>less</em> attention than fillers through most layers, while at <i>N</i> = 16 it gets <em>more</em> (+0.005 to +0.010). Failed trials are also no more diffuse than successful ones: the turns needed to cover 90% of attention differ by only +0.04, −0.10 and −0.10.</p></div>
+        <div class="side">
+          <figure><a href="static/images/section4_2_attention_gap.png" title="Open full size"><img src="static/images/section4_2_attention_gap.png" width="1298" height="900" alt="Anchor minus filler attention mass by layer for N = 4 (mostly negative) and N = 16 (mostly positive)."></a><figcaption>Anchor attention gap by layer. Negative means less attention to the anchor than to fillers.</figcaption></figure>
+          <div class="card table-card" style="padding:14px 16px">
+            <table class="plain">
+              <caption>Attention concentration (cov<sub>90</sub>) on class-matched failed vs successful samples.</caption>
+              <thead><tr><th>Metric</th><th><i>N</i></th><th>Failed</th><th>Success</th><th>Δ<sub>d</sub></th></tr></thead>
+              <tbody>
+                <tr><td>cov<sub>90</sub> (turns)</td><td>4</td><td>2.71</td><td>2.67</td><td>+0.04</td></tr>
+                <tr><td></td><td>8</td><td>6.15</td><td>6.25</td><td>−0.10</td></tr>
+                <tr><td></td><td>16</td><td>10.15</td><td>10.25</td><td>−0.10</td></tr>
+                <tr><td>cov<sub>90</sub> (tokens)</td><td>4</td><td>64.8</td><td>62.5</td><td>+2.4</td></tr>
+                <tr><td></td><td>8</td><td>96.6</td><td>94.8</td><td>+1.8</td></tr>
+                <tr><td></td><td>16</td><td>136.5</td><td>130.6</td><td>+5.9</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </article>
+
+      <article class="finding">
+        <div class="no">4</div>
+        <div><h3><span class="verdict yes">Causal</span>Restoring the representation rescues failed predictions; editing attention does not.</h3>
+        <p><b>Activation patching.</b> On failed trials we overwrite the decoding-position hidden state at layer 25 with a donor vector. For Qwen2.5-Omni at <i>N</i> = 16, a clean same-class donor lifts accuracy from 0.13 to <b>0.75</b>, while a wrong-class donor (0.17) and the model's own contaminated vector (0.22) stay near baseline. Qwen2-Audio shows the same pattern (clean donors 0.30–0.45).</p>
+        <p><b>Attention masking.</b> Amplifying the anchor turn, suppressing fillers, or a magnitude-matched random boost all change accuracy within noise; every 95% CI includes zero. A sweep over layer offsets and boost sizes peaks at +3.7, against +1.3 for the random control.</p></div>
+        <figure><a href="static/images/activation_patching_donors.png" title="Open full size"><img src="static/images/activation_patching_donors.png" width="2024" height="660" alt="Grouped bars of rescued accuracy on failed targets for Qwen2.5-Omni and Qwen2-Audio at N = 4, 8, 16: only the clean same-class donor rises well above baseline."></a>
+          <figcaption><b>Activation patching on failed targets.</b> Only clean same-class donors rescue failed predictions, ruling out a generic perturbation effect.</figcaption>
+        </figure>
+        <div class="card table-card" style="grid-column:1/-1;margin-top:14px;padding:14px 16px">
+          <table class="plain">
+            <caption>Attention-mask interventions on the failed subset (Qwen2.5-Omni, 80 samples per <i>N</i>). Baseline is accuracy (%); intervention rows are Δ vs baseline with paired-bootstrap 95% CIs.</caption>
+            <thead><tr><th></th><th><i>N</i> = 4</th><th><i>N</i> = 8</th><th><i>N</i> = 16</th></tr></thead>
+            <tbody>
+              <tr><td>Baseline (%)</td><td>12.5 <span class="ci">[6.2, 20.0]</span></td><td>12.5 <span class="ci">[6.2, 20.0]</span></td><td>15.0 <span class="ci">[7.5, 22.5]</span></td></tr>
+              <tr><td>Anchor amplification</td><td>+1.3 <span class="ci">[−5.0, +7.5]</span></td><td>+1.3 <span class="ci">[−5.0, +7.5]</span></td><td>+1.2 <span class="ci">[−6.2, +8.8]</span></td></tr>
+              <tr><td>Filler suppression</td><td>0.0 <span class="ci">[−6.2, +7.5]</span></td><td>+2.5 <span class="ci">[−5.0, +11.2]</span></td><td>0.0 <span class="ci">[−7.5, +7.5]</span></td></tr>
+              <tr><td>Random control</td><td>−1.3 <span class="ci">[−7.5, +5.0]</span></td><td>0.0 <span class="ci">[−6.2, +7.5]</span></td><td>+1.2 <span class="ci">[−6.2, +8.8]</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="robustness">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Robustness</h2></div>
+    <p class="lede">The effect is not tied to one mixing level or one model.</p>
+    <div class="two">
+      <div class="pair" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <figure><a href="static/images/paper_figure5_kimi_probe_unified.png" title="Open full size"><img src="static/images/paper_figure5_kimi_probe_unified.png" width="1185" height="898" alt="Layer-wise probe accuracy for Kimi-Audio, with delayed recovery in deep layers for long contexts."></a><figcaption>Kimi-Audio probe</figcaption></figure>
+        <figure><a href="static/images/paper_figure5_qwen2audio_probe_unified.png" title="Open full size"><img src="static/images/paper_figure5_qwen2audio_probe_unified.png" width="1185" height="898" alt="Layer-wise probe accuracy for Qwen2-Audio, with delayed recovery in deep layers for long contexts."></a><figcaption>Qwen2-Audio probe</figcaption></figure>
+        <p style="grid-column:1/-1;margin:4px 0 0;color:var(--ink-2);font-size:15px"><b>Across models.</b> Kimi-Audio and Qwen2-Audio show the same delayed acoustic integration at <i>N</i> ≥ 8: the sound is barely decodable in early and middle layers, then recovers sharply in the deepest blocks.</p>
+      </div>
+      <div class="card table-card" style="padding:14px 16px">
+        <h3 style="margin:2px 0 8px;font-size:16px">Across SNR (Qwen2.5-Omni, <i>N</i> = 16)</h3>
+        <table class="plain">
+          <caption>Both the behavioural gap Δ and the Phase-II alignment shift δ persist at 5 and 20 dB (500-instance subset).</caption>
+          <thead><tr><th>SNR</th><th>Δ at <i>N</i> = 16</th><th>Phase-II δ</th></tr></thead>
+          <tbody>
+            <tr><td>5 dB</td><td>+9%</td><td>0.045</td></tr>
+            <tr><td>10 dB (default)</td><td>+12%</td><td>0.067</td></tr>
+            <tr><td>20 dB</td><td>+15%</td><td>0.070</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="takeaways" class="soft">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">06</span><h2>What this means</h2></div>
+    <p class="lede">Acoustic information is largely preserved but becomes functionally misaligned with decoding in long contexts.</p>
+    <div class="three">
+      <div class="card"><span class="tag">Benchmarks</span><h3>Separate sound from speech</h3><p>Holding scripts, voice and turn structure fixed while only the probe target changes isolates modality-specific memory from content recall.</p></div>
+      <div class="card"><span class="tag">Bottleneck</span><h3>Representation, not retrieval</h3><p>Pre- and post-training that under-emphasize acoustic events, and weakly couple them with semantics, likely drive the gap.</p></div>
+      <div class="card"><span class="tag">Mitigation</span><h3>Train for format-compatible memory</h3><p>Post-hoc patching shows the failure is correctable; the next step is integrating acoustic representations during training.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="bibtex">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-num">07</span><h2>BibTeX</h2></div>
+    <p class="lede">If you find EnvMem useful, please cite:</p>
+    <div class="bib">
+<pre id="bib-text">@inproceedings{xiao2026envmem,
+  title     = {Why Can't They Remember? Uncovering Representation and Retrieval
+               Bottlenecks in Multi-Turn Acoustic Memory},
+  author    = {Xiao, Yang and Wang, Siyi and Yin, Han and Jia, Hong and
+               Sethu, Vidhyasaharan and Holden, Eun-Jung and Dang, Ting},
+  booktitle = {Proceedings of the 2026 Conference on Empirical Methods
+               in Natural Language Processing (EMNLP)},
+  year      = {2026}
+}</pre>
+      <button type="button" class="copy" id="copy-bib">Copy</button>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 The EnvMem authors</span>
+    <span>Contact: <a href="mailto:yang.xiao.1@student.unimelb.edu.au">yang.xiao.1@student.unimelb.edu.au</a></span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Accuracies at N = 2, 4, 8, 16 read from Figure 2; delta values as printed in the figure.
+  var NS = [2, 4, 8, 16];
+  var M = [
+    {name: "Qwen2.5-Omni", a: [0.70, 0.61, 0.59, 0.56], s: [0.92, 0.90, 0.86, 0.84], d: [0, 9, 10, 12]},
+    {name: "Kimi-Audio",   a: [0.57, 0.51, 0.47, 0.42], s: [0.90, 0.82, 0.78, 0.74], d: [0, 1, 5, 8]},
+    {name: "Qwen2-Audio",  a: [0.39, 0.35, 0.32, 0.28], s: [0.90, 0.72, 0.72, 0.70], d: [0, -8, -1, 8]}
+  ];
+  var state = {m: 0, n: 3};
+  var $ = function (id) { return document.getElementById(id); };
+
+  function track(n) {
+    var t = $("gx-track"), html = "";
+    for (var i = 1; i <= n; i++) {
+      var cls = i === 1 ? "anchor" : (i === n ? "probe" : "");
+      var lab = i === 1 ? "u1" : (i === n ? "Q" : (n <= 8 ? i : ""));
+      html += '<div class="gx-turn ' + cls + '">' + lab + '</div>';
+    }
+    t.innerHTML = html;
+  }
+  function render() {
+    var m = M[state.m], k = state.n, n = NS[k];
+    track(n);
+    $("gx-s").style.width = (m.s[k] * 100) + "%";
+    $("gx-a").style.width = (m.a[k] * 100) + "%";
+    $("gx-sb").style.left = "calc(" + (m.s[0] * 100) + "% - 1px)";
+    $("gx-ab").style.left = "calc(" + (m.a[0] * 100) + "% - 1px)";
+    $("gx-sv").textContent = m.s[k].toFixed(2);
+    $("gx-av").textContent = m.a[k].toFixed(2);
+    var d = m.d[k], el = $("gx-d");
+    el.textContent = k === 0 ? "baseline" : (d > 0 ? "+" : d < 0 ? "−" : "±") + Math.abs(d) + "%";
+    el.className = "gx-delta " + (k === 0 || d === 0 ? "zero" : d > 0 ? "pos" : "neg");
+    var e;
+    if (k === 0) e = "With N = 2 the probe immediately follows the anchor. Any gap here is perception, not memory" + (state.m === 2 ? ": Qwen2-Audio already struggles to hear the sound." : ".");
+    else if (d > 0) e = "Relative to its own N = 2 baseline, " + m.name + "'s acoustic memory has lost more ground than its semantic memory over " + n + " turns.";
+    else e = "Semantic accuracy dropped more steeply here in relative terms, a side effect of the weak acoustic baseline. By N = 16 the gap turns positive.";
+    $("gx-e").textContent = e;
+  }
+  function bind(groupId, key, attr) {
+    var btns = $(groupId).querySelectorAll("button");
+    btns.forEach(function (b) {
+      b.addEventListener("click", function () {
+        btns.forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
+        b.setAttribute("aria-pressed", "true");
+        state[key] = +b.getAttribute(attr);
+        render();
+      });
+    });
+  }
+  bind("gx-model", "m", "data-m");
+  bind("gx-n", "n", "data-n");
+  render();
+
+  var copy = $("copy-bib");
+  copy.addEventListener("click", function () {
+    var txt = $("bib-text").textContent;
+    var done = function () { copy.textContent = "Copied"; setTimeout(function () { copy.textContent = "Copy"; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done, function () {});
+  });
+})();
+</script>
+</body>
+</html>
